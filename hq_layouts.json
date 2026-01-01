@@ -1,0 +1,203 @@
+{
+  "1438307693579206666": {
+    "title": "ALLIANCE HQ PLACEMENT \u2014 HQ CORE",
+    "cols": 11,
+    "rows": 11,
+    "claims": {
+      "E6": {
+        "user_id": null,
+        "user_name": "Queen",
+        "manual": true
+      },
+      "G7": {
+        "user_id": null,
+        "user_name": "NIte Hawk",
+        "manual": true
+      },
+      "F8": {
+        "user_id": null,
+        "user_name": "YE1",
+        "manual": true
+      },
+      "F5": {
+        "user_id": null,
+        "user_name": "Drewfie73",
+        "manual": true
+      },
+      "G6": {
+        "user_id": null,
+        "user_name": "GOOD GIRL",
+        "manual": true
+      },
+      "H6": {
+        "user_id": null,
+        "user_name": "REAPER",
+        "manual": true
+      },
+      "G8": {
+        "user_id": null,
+        "user_name": "MINOS",
+        "manual": true
+      },
+      "G9": {
+        "user_id": null,
+        "user_name": "COCA COLA",
+        "manual": true
+      },
+      "F9": {
+        "user_id": null,
+        "user_name": "ELLIEXOX",
+        "manual": true
+      },
+      "F10": {
+        "user_id": null,
+        "user_name": "JUST A LIL TORMENTED",
+        "manual": true
+      },
+      "F11": {
+        "user_id": null,
+        "user_name": "OB 7,0 DEVILS DOG",
+        "manual": true
+      },
+      "E8": {
+        "user_id": "1234362700729946212",
+        "user_name": "\ua9c1\u0f12\u262cBad~Girl\u262c\u0f12\ua9c2"
+      }
+    },
+    "slot_labels": {},
+    "settings": {
+      "war_mode": true,
+      "core_highlight": true
+    },
+    "anchor": {
+      "state": 789,
+      "slot": "E6",
+      "x": 220,
+      "y": 484,
+      "name": "ALLIANCE FORT"
+    },
+    "locked_structures": [
+      {
+        "key": "FORT",
+        "name": "ALLIANCE FORT",
+        "s": 789,
+        "x": 220,
+        "y": 484
+      },
+      {
+        "key": "SONIC",
+        "name": "SONIC",
+        "s": 789,
+        "x": 222,
+        "y": 486
+      },
+      {
+        "key": "RSS",
+        "name": "ALLIANCE RSS",
+        "s": 789,
+        "x": 216,
+        "y": 468
+      },
+      {
+        "key": "WAREHOUSE",
+        "name": "ALLIANCE WAREHOUSE",
+        "s": 789,
+        "x": 218,
+        "y": 466
+      },
+      {
+        "key": "HOSPITAL",
+        "name": "HOSPITAL",
+        "s": 789,
+        "x": 220,
+        "y": 464
+      }
+    ],
+    "cal_points": {
+      "F6": [
+        220,
+        484
+      ],
+      "F7": [
+        222,
+        486
+      ],
+      "F8": [
+        224,
+        490
+      ],
+      "F9": [
+        226,
+        492
+      ],
+      "F10": [
+        228,
+        494
+      ],
+      "F11": [
+        230,
+        496
+      ],
+      "F5": [
+        218,
+        484
+      ],
+      "F4": [
+        216,
+        482
+      ],
+      "F3": [
+        214,
+        480
+      ],
+      "F2": [
+        212,
+        478
+      ],
+      "F1": [
+        210,
+        476
+      ],
+      "G1": [
+        212,
+        474
+      ],
+      "H1": [
+        214,
+        472
+      ],
+      "I1": [
+        216,
+        468
+      ],
+      "J1": [
+        218,
+        466
+      ],
+      "K1": [
+        220,
+        464
+      ],
+      "H2": [
+        216,
+        474
+      ],
+      "K11": [
+        240,
+        486
+      ],
+      "A11": [
+        220,
+        506
+      ]
+    },
+    "calibration": {
+      "a0": 199.99999999999991,
+      "aC": 2.000000000000012,
+      "aR": 2.0000000000000027,
+      "b0": 486.1635220125784,
+      "bC": -2.1383647798741956,
+      "bR": 2.0314465408805074
+    }
+  }
+}
