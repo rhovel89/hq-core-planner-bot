@@ -1,4 +1,4 @@
-# =========================================================
+﻿# =========================================================
 # HQ CORE PLANNER BOT (Puzzle & Survival) — 11x11 + Core/Rings
 # FULL UPDATED SINGLE-FILE BOT (with COLOR CLAIMS + RECOLOR + member claimcolor)
 #
