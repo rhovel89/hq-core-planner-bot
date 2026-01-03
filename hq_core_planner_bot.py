@@ -633,11 +633,11 @@ async def layout_lockreport(interaction: discord.Interaction):
     await interaction.response.send_message("\n".join(lines))
 
     @layout_group.command(name="storage", description="Show where the bot is saving data (debug).")
-async def layout_storage(interaction: discord.Interaction):
-    path = os.path.abspath(DATA_FILE)
-    exists = os.path.exists(DATA_FILE)
-    size = os.path.getsize(DATA_FILE) if exists else 0
-    await interaction.response.send_message(
+    async def layout_storage(interaction: discord.Interaction):
+        path = os.path.abspath(DATA_FILE)
+        exists = os.path.exists(DATA_FILE)
+        size = os.path.getsize(DATA_FILE) if exists else 0
+        await interaction.response.send_message(
         f"DATA_FILE = `{DATA_FILE}`\n"
         f"ABS PATH = `{path}`\n"
         f"EXISTS = `{exists}` | SIZE = `{size}` bytes",
@@ -872,7 +872,7 @@ def render_png(layout: Dict[str, Any]) -> Tuple[str, bytes]:
     return "hq_layout.png", buf.getvalue()
 
 @layout_group.command(name="png", description="Generate PNG map (names, colors, coords, locks, labels).")
-async def layout_png(interaction: discord.Interaction):
+    async def layout_png(interaction: discord.Interaction):
     gid = str(interaction.guild_id)
     layout = bot.data.get(gid)
     if not layout:
@@ -881,7 +881,6 @@ async def layout_png(interaction: discord.Interaction):
     filename, png_bytes = render_png(layout)
     file = discord.File(fp=io.BytesIO(png_bytes), filename=filename)
     await interaction.response.send_message(file=file)
-
 
 # =========================================================
 # CAL COMMANDS
