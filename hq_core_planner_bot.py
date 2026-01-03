@@ -1,34 +1,22 @@
 ﻿# =========================================================
 # HQ CORE PLANNER BOT (Puzzle & Survival) — 11x11 + Core/Rings
-# FULL UPDATED SINGLE-FILE BOT (with COLOR CLAIMS + RECOLOR + member claimcolor)
-#
-# Includes:
-# - /layout create, /layout png, /layout exportcsv, /layout lockreport
-# - /layout lockslot, /layout unlockslot
-# - /layout war on|off
-# - /layout corehighlight on|off
-# - /cal add, /cal show, /cal fit, /cal clear
-# - /slot claim (members), /slot claimcolor (members)
-# - /slot claimfor (Leadership), /slot claimforcolor (Leadership)
-# - /slot claimname (Leadership), /slot claimnamecolor (Leadership)
-# - /slot claimcoord (Leadership)
-# - /slot swap, /slot unclaimfor
-# - /slot coord, /slot fromcoord
-# - /slot label, /slot labelclear
-# - /slot recolor (Leadership)  ✅ change color without unclaiming
-# - /slot forceclaimfor / forceclaimname (Leadership) ✅ overwrite slot assignment
+# COMPLETE SINGLE-FILE BOT (with COLORS + STORAGE DEBUG + PERSISTENT DATA_FILE)
 #
 # Install:
 #   pip install -U discord.py pillow
 #
-# Set token:
-#   setx DISCORD_BOT_TOKEN "YOUR_TOKEN_HERE"
+# Environment Variables:
+#   DISCORD_BOT_TOKEN   = your bot token
+#   DISCORD_GUILD_ID    = (optional) your server id to speed slash command sync
+#   DATA_FILE           = (recommended on Railway) /app/data/hq_layouts.json
 #
-# Optional: faster command sync to one server:
-#   setx DISCORD_GUILD_ID "YOUR_SERVER_ID"
+# Railway Persistence:
+# - Attach a Railway Volume node to this service
+# - Set the Volume mount path to: /app/data
+# - Set DATA_FILE variable to: /app/data/hq_layouts.json
 #
 # Fonts (optional but recommended for symbols):
-#   Create folder next to this file: .\fonts\
+#   Create folder next to this file: ./fonts/
 #   Put:
 #     NotoSans-Regular.ttf
 #     NotoSansSymbols2-Regular.ttf
@@ -53,6 +41,8 @@ from PIL import Image, ImageDraw, ImageFont
 # =========================================================
 STATE_ID = 789
 LEADERSHIP_ROLE_NAME = "Leadership"
+
+# IMPORTANT: makes file path configurable (Railway volume)
 DATA_FILE = os.getenv("DATA_FILE", "hq_layouts.json")
 
 # Default anchor (used only before calibration is fitted)
@@ -98,6 +88,7 @@ COLOR_PRESETS = {
     "black": (30, 30, 30),
 }
 
+
 def parse_color(color_str: Optional[str]) -> Optional[Tuple[int, int, int]]:
     if not color_str:
         return None
@@ -119,10 +110,12 @@ def parse_color(color_str: Optional[str]) -> Optional[Tuple[int, int, int]]:
 
     return None
 
+
 def ideal_text_color(bg_rgb: Tuple[int, int, int]) -> Tuple[int, int, int]:
     r, g, b = bg_rgb
     lum = (0.299 * r + 0.587 * g + 0.114 * b)
     return (20, 20, 20) if lum > 150 else (245, 245, 245)
+
 
 def color_help_text() -> str:
     presets = ", ".join(sorted(COLOR_PRESETS.keys()))
@@ -151,14 +144,24 @@ def load_font(size: int) -> ImageFont.FreeTypeFont:
 # PERSISTENCE
 # =========================================================
 def load_data() -> Dict[str, Any]:
+    # Ensure directory exists if DATA_FILE has a folder (e.g. /app/data/...)
+    data_dir = os.path.dirname(DATA_FILE)
+    if data_dir:
+        os.makedirs(data_dir, exist_ok=True)
+
     if not os.path.exists(DATA_FILE):
         return {}
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_data(data: Dict[str, Any]) -> None:
+    data_dir = os.path.dirname(DATA_FILE)
+    if data_dir:
+        os.makedirs(data_dir, exist_ok=True)
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 # =========================================================
@@ -166,6 +169,7 @@ def save_data(data: Dict[str, Any]) -> None:
 # =========================================================
 def col_labels(n: int) -> List[str]:
     return list(string.ascii_uppercase[:n])
+
 
 def normalize_slot(slot: str) -> Optional[str]:
     slot = slot.strip().upper()
@@ -177,17 +181,21 @@ def normalize_slot(slot: str) -> Optional[str]:
         return None
     return f"{col}{int(row)}"
 
+
 def slot_to_indices(slot: str) -> Tuple[int, int]:
     s = normalize_slot(slot)
     if not s:
         raise ValueError("Invalid slot")
     return ord(s[0]) - ord("A"), int(s[1:]) - 1
 
+
 def indices_to_slot(col: int, row: int) -> str:
     return f"{chr(ord('A') + col)}{row + 1}"
 
+
 def is_leadership(member: discord.Member) -> bool:
     return any(role.name == LEADERSHIP_ROLE_NAME for role in getattr(member, "roles", []))
+
 
 def is_locked_xy(s: int, x: int, y: int) -> Optional[Dict[str, Any]]:
     for st in LOCKED_STRUCTURES:
@@ -195,12 +203,15 @@ def is_locked_xy(s: int, x: int, y: int) -> Optional[Dict[str, Any]]:
             return st
     return None
 
+
 def is_slot_locked(layout: Dict[str, Any], slot: str) -> bool:
     s = normalize_slot(slot)
     if not s or s not in LOCKED_SLOTS:
         return False
     overrides = layout.get("locked_slot_overrides", {})
+    # default = locked; override False = unlocked
     return overrides.get(s, True) is True
+
 
 def get_ring(slot: str) -> str:
     slot = normalize_slot(slot) or slot
@@ -245,6 +256,7 @@ def solve_3x3(A: List[List[float]], b: List[float]) -> Optional[List[float]]:
                 M[r][c] -= factor * M[i][c]
     return [M[0][3], M[1][3], M[2][3]]
 
+
 def fit_affine(points: Dict[str, Tuple[int, int]]) -> Optional[Dict[str, float]]:
     if len(points) < 3:
         return None
@@ -274,11 +286,13 @@ def fit_affine(points: Dict[str, Tuple[int, int]]) -> Optional[Dict[str, float]]
         "b0": float(py[0]), "bC": float(py[1]), "bR": float(py[2]),
     }
 
+
 def affine_slot_to_xy(slot: str, coef: Dict[str, float]) -> Tuple[int, int]:
     c, r = slot_to_indices(slot)
     x = coef["a0"] + coef["aC"] * c + coef["aR"] * r
     y = coef["b0"] + coef["bC"] * c + coef["bR"] * r
     return int(round(x)), int(round(y))
+
 
 def affine_xy_to_slot(x: int, y: int, coef: Dict[str, float], cols: int, rows: int) -> Optional[str]:
     aC, aR = coef["aC"], coef["aR"]
@@ -300,6 +314,7 @@ def affine_xy_to_slot(x: int, y: int, coef: Dict[str, float], cols: int, rows: i
         return None
     return indices_to_slot(col_i, row_i)
 
+
 def slot_to_xy_layout(layout: Dict[str, Any], slot: str) -> Tuple[int, int]:
     coef = layout.get("calibration")
     if coef:
@@ -319,6 +334,7 @@ def slot_to_xy_layout(layout: Dict[str, Any], slot: str) -> Tuple[int, int]:
     dr = (int(s[1:]) - int(a[1:]))
 
     return ax + dc, ay + dr
+
 
 def xy_to_slot_layout(layout: Dict[str, Any], x: int, y: int) -> Optional[str]:
     coef = layout.get("calibration")
@@ -369,6 +385,7 @@ class HQCorePlanner(commands.Bot):
         self.tree.add_command(slot_group)
         self.tree.add_command(cal_group)
 
+        # Faster dev sync if DISCORD_GUILD_ID is set
         if GUILD_ID_ENV and GUILD_ID_ENV.isdigit():
             gid = int(GUILD_ID_ENV)
             guild = discord.Object(id=gid)
@@ -376,6 +393,7 @@ class HQCorePlanner(commands.Bot):
             await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
+
 
 bot = HQCorePlanner()
 
@@ -393,6 +411,7 @@ def validate_slot_in_grid(layout: Dict[str, Any], slot: str) -> Optional[str]:
     if r < 1 or r > rows:
         return "That slot is outside the current grid."
     return None
+
 
 def validate_not_locked(layout: Dict[str, Any], slot: str) -> Optional[str]:
     s = normalize_slot(slot)
@@ -418,6 +437,7 @@ def validate_not_locked(layout: Dict[str, Any], slot: str) -> Optional[str]:
 
     return None
 
+
 def ensure_settings(layout: Dict[str, Any]) -> Dict[str, Any]:
     layout.setdefault("settings", {"war_mode": False, "core_highlight": False})
     layout["settings"].setdefault("war_mode", False)
@@ -430,8 +450,12 @@ def ensure_settings(layout: Dict[str, Any]) -> Dict[str, Any]:
 # =========================================================
 @layout_group.command(name="create", description="Create/overwrite layout for this server (default 11x11).")
 @app_commands.describe(cols="Columns (default 11)", rows="Rows (default 11)", title="Layout title")
-async def layout_create(interaction: discord.Interaction, cols: int = 11, rows: int = 11,
-                        title: str = "ALLIANCE HQ PLACEMENT — HQ CORE"):
+async def layout_create(
+    interaction: discord.Interaction,
+    cols: int = 11,
+    rows: int = 11,
+    title: str = "ALLIANCE HQ PLACEMENT — HQ CORE",
+):
     if cols < 2 or cols > 26:
         await interaction.response.send_message("Cols must be between 2 and 26.", ephemeral=True)
         return
@@ -461,6 +485,7 @@ async def layout_create(interaction: discord.Interaction, cols: int = 11, rows: 
         f"Recommended: add calibration points with `/cal add` then `/cal fit`."
     )
 
+
 @layout_group.command(name="war", description="Toggle WAR mode styling for PNG (dark theme).")
 @app_commands.describe(mode="on or off")
 async def layout_war(interaction: discord.Interaction, mode: str):
@@ -484,6 +509,7 @@ async def layout_war(interaction: discord.Interaction, mode: str):
     save_data(bot.data)
 
     await interaction.response.send_message(f"✅ WAR mode is now **{m.upper()}**.")
+
 
 @layout_group.command(name="corehighlight", description="Toggle HQ CORE highlight outline on PNG.")
 @app_commands.describe(mode="on or off")
@@ -509,6 +535,7 @@ async def layout_corehighlight(interaction: discord.Interaction, mode: str):
 
     await interaction.response.send_message(f"✅ CORE highlight is now **{m.upper()}**.")
 
+
 @layout_group.command(name="unlockslot", description="Leadership: Unlock a default locked slot for this server.")
 @app_commands.describe(slot="Example: F7")
 async def layout_unlockslot(interaction: discord.Interaction, slot: str):
@@ -526,7 +553,7 @@ async def layout_unlockslot(interaction: discord.Interaction, slot: str):
     if not s or s not in LOCKED_SLOTS:
         await interaction.response.send_message(
             f"That slot is not a default locked standard. Standards: {', '.join(sorted(LOCKED_SLOTS.keys()))}.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
@@ -535,6 +562,7 @@ async def layout_unlockslot(interaction: discord.Interaction, slot: str):
     save_data(bot.data)
 
     await interaction.response.send_message(f"✅ **{s}** is now **UNLOCKED** for this server.")
+
 
 @layout_group.command(name="lockslot", description="Leadership: Re-lock a default locked slot for this server.")
 @app_commands.describe(slot="Example: F7")
@@ -553,7 +581,7 @@ async def layout_lockslot(interaction: discord.Interaction, slot: str):
     if not s or s not in LOCKED_SLOTS:
         await interaction.response.send_message(
             f"That slot is not a default locked standard. Standards: {', '.join(sorted(LOCKED_SLOTS.keys()))}.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
@@ -562,6 +590,7 @@ async def layout_lockslot(interaction: discord.Interaction, slot: str):
     save_data(bot.data)
 
     await interaction.response.send_message(f"🔒 **{s}** is now **LOCKED** again for this server.")
+
 
 @layout_group.command(name="lockreport", description="Audit locks, mapping mismatches, and coordinate collisions.")
 async def layout_lockreport(interaction: discord.Interaction):
@@ -595,7 +624,7 @@ async def layout_lockreport(interaction: discord.Interaction):
             continue
         px, py = slot_to_xy_layout(layout, slot)
         st = LOCKED_SLOTS[slot]
-        match = "MATCH ✅" if (px == st['x'] and py == st['y']) else "MISMATCH ⚠"
+        match = "MATCH ✅" if (px == st["x"] and py == st["y"]) else "MISMATCH ⚠"
         lines.append(f"- {slot}: pred X:{px} Y:{py} | std X:{st['x']} Y:{st['y']} → {match}")
 
     coord_to_slot: Dict[Tuple[int, int], str] = {}
@@ -632,17 +661,6 @@ async def layout_lockreport(interaction: discord.Interaction):
 
     await interaction.response.send_message("\n".join(lines))
 
-    @layout_group.command(name="storage", description="Show where the bot is saving data (debug).")
-    async def layout_storage(interaction: discord.Interaction):
-        path = os.path.abspath(DATA_FILE)
-        exists = os.path.exists(DATA_FILE)
-        size = os.path.getsize(DATA_FILE) if exists else 0
-        await interaction.response.send_message(
-        f"DATA_FILE = `{DATA_FILE}`\n"
-        f"ABS PATH = `{path}`\n"
-        f"EXISTS = `{exists}` | SIZE = `{size}` bytes",
-        ephemeral=True
-    )
 
 @layout_group.command(name="exportcsv", description="Export slot→coordinate table as CSV (ring + lock + claim + color).")
 async def layout_exportcsv(interaction: discord.Interaction):
@@ -685,8 +703,10 @@ async def layout_exportcsv(interaction: discord.Interaction):
             claimed_by = claim.get("user_name", "")
             color = claim.get("color", "")
 
-            w.writerow([STATE_ID, slot, get_ring(slot), x, y,
-                        "YES" if locked else "NO", locked_name, locked_type, claimed_by, color])
+            w.writerow(
+                [STATE_ID, slot, get_ring(slot), x, y,
+                 "YES" if locked else "NO", locked_name, locked_type, claimed_by, color]
+            )
 
     data = out.getvalue().encode("utf-8")
     file = discord.File(fp=io.BytesIO(data), filename="hq_slot_coordinates.csv")
@@ -860,19 +880,27 @@ def render_png(layout: Dict[str, Any]) -> Tuple[str, bytes]:
                 bar_x0 = x0 + 8
                 bar_x1 = x0 + cell_w - 8
                 bar_y1 = bar_y0 + bar_h
-                draw.rectangle([bar_x0, bar_y0, bar_x1, bar_y1],
-                               fill=(0, 0, 0) if war_mode else (30, 30, 30),
-                               outline=(120, 120, 120) if war_mode else (80, 80, 80), width=2)
+                draw.rectangle(
+                    [bar_x0, bar_y0, bar_x1, bar_y1],
+                    fill=(0, 0, 0) if war_mode else (30, 30, 30),
+                    outline=(120, 120, 120) if war_mode else (80, 80, 80),
+                    width=2,
+                )
                 ow = draw.textlength(overlay, font=font_overlay)
-                draw.text((x0 + (cell_w - ow) / 2, bar_y0 + 2), overlay, font=font_overlay,
-                          fill=(235, 235, 235) if war_mode else (245, 245, 245))
+                draw.text(
+                    (x0 + (cell_w - ow) / 2, bar_y0 + 2),
+                    overlay,
+                    font=font_overlay,
+                    fill=(235, 235, 235) if war_mode else (245, 245, 245),
+                )
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return "hq_layout.png", buf.getvalue()
 
+
 @layout_group.command(name="png", description="Generate PNG map (names, colors, coords, locks, labels).")
-    async def layout_png(interaction: discord.Interaction):
+async def layout_png(interaction: discord.Interaction):
     gid = str(interaction.guild_id)
     layout = bot.data.get(gid)
     if not layout:
@@ -881,6 +909,20 @@ def render_png(layout: Dict[str, Any]) -> Tuple[str, bytes]:
     filename, png_bytes = render_png(layout)
     file = discord.File(fp=io.BytesIO(png_bytes), filename=filename)
     await interaction.response.send_message(file=file)
+
+
+@layout_group.command(name="storage", description="Show where the bot is saving data (debug).")
+async def layout_storage(interaction: discord.Interaction):
+    path = os.path.abspath(DATA_FILE)
+    exists = os.path.exists(DATA_FILE)
+    size = os.path.getsize(DATA_FILE) if exists else 0
+    await interaction.response.send_message(
+        f"DATA_FILE = `{DATA_FILE}`\n"
+        f"ABS PATH = `{path}`\n"
+        f"EXISTS = `{exists}` | SIZE = `{size}` bytes",
+        ephemeral=True,
+    )
+
 
 # =========================================================
 # CAL COMMANDS
@@ -913,6 +955,7 @@ async def cal_add(interaction: discord.Interaction, slot: str, state: int, x: in
 
     await interaction.response.send_message(f"✅ Saved: **{s}** → S:{STATE_ID} X:{x} Y:{y}")
 
+
 @cal_group.command(name="show", description="Show saved calibration points.")
 async def cal_show(interaction: discord.Interaction):
     if not is_leadership(interaction.user):
@@ -933,6 +976,7 @@ async def cal_show(interaction: discord.Interaction):
         lines.append(f"- {k}: S:{STATE_ID} X:{x} Y:{y}")
     await interaction.response.send_message("\n".join(lines))
 
+
 @cal_group.command(name="clear", description="Clear all calibration points and fitted mapping.")
 async def cal_clear(interaction: discord.Interaction):
     if not is_leadership(interaction.user):
@@ -950,6 +994,7 @@ async def cal_clear(interaction: discord.Interaction):
     save_data(bot.data)
 
     await interaction.response.send_message("🧼 Calibration cleared. Add points with `/cal add`, then run `/cal fit`.")
+
 
 @cal_group.command(name="fit", description="Fit mapping from saved points and show per-point error.")
 async def cal_fit(interaction: discord.Interaction):
@@ -973,7 +1018,7 @@ async def cal_fit(interaction: discord.Interaction):
     if not coef:
         await interaction.response.send_message(
             "Calibration failed. Add more varied points across the grid and retry.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
@@ -1022,6 +1067,7 @@ async def slot_coord(interaction: discord.Interaction, slot: str):
     x, y = slot_to_xy_layout(layout, s)
     await interaction.response.send_message(f"**{s}** ({get_ring(s)}) → **S:{STATE_ID} X:{x} Y:{y}**")
 
+
 @slot_group.command(name="fromcoord", description="Find slot for an in-game coordinate (if inside grid).")
 @app_commands.describe(state="State (789)", x="X", y="Y")
 async def slot_fromcoord(interaction: discord.Interaction, state: int, x: int, y: int):
@@ -1041,6 +1087,7 @@ async def slot_fromcoord(interaction: discord.Interaction, state: int, x: int, y
         return
 
     await interaction.response.send_message(f"S:{state} X:{x} Y:{y} → **{slot}** ({get_ring(slot)})")
+
 
 @slot_group.command(name="claim", description="Members claim Ring 2 / Ring 3. Ring 1 & CORE are Leadership-assigned.")
 @app_commands.describe(slot="Example: A10")
@@ -1081,6 +1128,7 @@ async def slot_claim(interaction: discord.Interaction, slot: str):
 
     x, y = slot_to_xy_layout(layout, s)
     await interaction.response.send_message(f"✅ Claimed **{s}** → **S:{STATE_ID} X:{x} Y:{y}** for **{interaction.user.display_name}**.")
+
 
 @slot_group.command(name="claimcolor", description="Members claim Ring 2/3 with a color (preset or #RRGGBB).")
 @app_commands.describe(slot="Example: A10", color="Preset (red/blue/etc) or hex (#RRGGBB)")
@@ -1129,6 +1177,7 @@ async def slot_claimcolor(interaction: discord.Interaction, slot: str, color: st
         f"✅ Claimed **{s}** → **S:{STATE_ID} X:{x} Y:{y}** for **{interaction.user.display_name}** with color **{color}**."
     )
 
+
 @slot_group.command(name="claimfor", description="Leadership: Assign a slot to a Discord member.")
 @app_commands.describe(member="Member", slot="Example: E6")
 async def slot_claimfor(interaction: discord.Interaction, member: discord.Member, slot: str):
@@ -1169,6 +1218,7 @@ async def slot_claimfor(interaction: discord.Interaction, member: discord.Member
     await interaction.response.send_message(
         f"🏰 Assigned **{s}** ({get_ring(s)}) → **S:{STATE_ID} X:{x} Y:{y}** to **{member.display_name}**."
     )
+
 
 @slot_group.command(name="claimforcolor", description="Leadership: Assign a slot to a Discord member with a color.")
 @app_commands.describe(member="Member", slot="Example: E6", color="Preset (red/blue/etc) or hex (#RRGGBB)")
@@ -1216,6 +1266,7 @@ async def slot_claimforcolor(interaction: discord.Interaction, member: discord.M
         f"🏰 Assigned **{s}** ({get_ring(s)}) → **S:{STATE_ID} X:{x} Y:{y}** to **{member.display_name}** with color **{color}**."
     )
 
+
 @slot_group.command(name="claimname", description="Leadership: Assign a slot to a typed in-game name (symbols allowed).")
 @app_commands.describe(slot="Example: E6", name="Type the player's in-game name (symbols allowed).")
 async def slot_claimname(interaction: discord.Interaction, slot: str, name: str):
@@ -1255,7 +1306,7 @@ async def slot_claimname(interaction: discord.Interaction, slot: str, name: str)
     if s in claims:
         await interaction.response.send_message(
             f"{s} is already claimed by **{claims[s].get('user_name','(unknown)')}**.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
@@ -1266,6 +1317,7 @@ async def slot_claimname(interaction: discord.Interaction, slot: str, name: str)
     await interaction.response.send_message(
         f"✍️ Assigned **{s}** ({get_ring(s)}) → **S:{STATE_ID} X:{x} Y:{y}** to:\n**{cleaned}**"
     )
+
 
 @slot_group.command(name="claimnamecolor", description="Leadership: Assign a slot to a typed in-game name with a color.")
 @app_commands.describe(slot="Example: E6", name="In-game name (symbols allowed)", color="Preset (red/blue/etc) or hex (#RRGGBB)")
@@ -1311,7 +1363,7 @@ async def slot_claimnamecolor(interaction: discord.Interaction, slot: str, name:
     if s in claims:
         await interaction.response.send_message(
             f"{s} is already claimed by **{claims[s].get('user_name','(unknown)')}**.",
-            ephemeral=True
+            ephemeral=True,
         )
         return
 
@@ -1323,6 +1375,7 @@ async def slot_claimnamecolor(interaction: discord.Interaction, slot: str, name:
         f"✍️ Assigned **{s}** ({get_ring(s)}) → **S:{STATE_ID} X:{x} Y:{y}** to:\n"
         f"**{cleaned}** with color **{color}**."
     )
+
 
 @slot_group.command(name="claimcoord", description="Leadership: Assign a slot by in-game coordinate (S/X/Y).")
 @app_commands.describe(member="Member", state="789", x="X", y="Y")
@@ -1361,6 +1414,7 @@ async def slot_claimcoord(interaction: discord.Interaction, member: discord.Memb
 
     await interaction.response.send_message(f"🏰 Assigned by coord: **{member.display_name}** → **{slot}** ({get_ring(slot)})")
 
+
 @slot_group.command(name="recolor", description="Leadership: Change the color of an existing claim without unclaiming.")
 @app_commands.describe(slot="Example: E6", color="Preset (red/blue/etc) or hex (#RRGGBB)")
 async def slot_recolor(interaction: discord.Interaction, slot: str, color: str):
@@ -1392,6 +1446,7 @@ async def slot_recolor(interaction: discord.Interaction, slot: str, color: str):
     save_data(bot.data)
     await interaction.response.send_message(f"🎨 Updated color for **{s}** to **{color}**.")
 
+
 @slot_group.command(name="forceclaimfor", description="Leadership: Overwrite an existing claim for a slot (Discord member).")
 @app_commands.describe(member="Member", slot="Example: E6", color="Optional: preset or #RRGGBB")
 async def slot_forceclaimfor(interaction: discord.Interaction, member: discord.Member, slot: str, color: str = ""):
@@ -1419,17 +1474,19 @@ async def slot_forceclaimfor(interaction: discord.Interaction, member: discord.M
         await interaction.response.send_message(lock_err, ephemeral=True)
         return
 
-    if color:
-        if parse_color(color) is None:
-            await interaction.response.send_message(f"Invalid color. {color_help_text()}", ephemeral=True)
-            return
+    if color and parse_color(color) is None:
+        await interaction.response.send_message(f"Invalid color. {color_help_text()}", ephemeral=True)
+        return
 
     layout["claims"][s] = {"user_id": str(member.id), "user_name": member.display_name}
     if color:
         layout["claims"][s]["color"] = color.strip()
     save_data(bot.data)
 
-    await interaction.response.send_message(f"✅ Force assigned **{s}** to **{member.display_name}**." + (f" Color: **{color}**." if color else ""))
+    await interaction.response.send_message(
+        f"✅ Force assigned **{s}** to **{member.display_name}**." + (f" Color: **{color}**." if color else "")
+    )
+
 
 @slot_group.command(name="forceclaimname", description="Leadership: Overwrite an existing claim for a slot (typed name).")
 @app_commands.describe(slot="Example: E6", name="In-game name (symbols allowed)", color="Optional: preset or #RRGGBB")
@@ -1465,17 +1522,19 @@ async def slot_forceclaimname(interaction: discord.Interaction, slot: str, name:
     if len(cleaned) > 60:
         cleaned = cleaned[:60] + "…"
 
-    if color:
-        if parse_color(color) is None:
-            await interaction.response.send_message(f"Invalid color. {color_help_text()}", ephemeral=True)
-            return
+    if color and parse_color(color) is None:
+        await interaction.response.send_message(f"Invalid color. {color_help_text()}", ephemeral=True)
+        return
 
     layout["claims"][s] = {"user_id": None, "user_name": cleaned, "manual": True}
     if color:
         layout["claims"][s]["color"] = color.strip()
     save_data(bot.data)
 
-    await interaction.response.send_message(f"✅ Force assigned **{s}** to **{cleaned}**." + (f" Color: **{color}**." if color else ""))
+    await interaction.response.send_message(
+        f"✅ Force assigned **{s}** to **{cleaned}**." + (f" Color: **{color}**." if color else "")
+    )
+
 
 @slot_group.command(name="swap", description="Leadership: Swap two claimed slots instantly.")
 @app_commands.describe(slot_a="Example: D7", slot_b="Example: E6")
@@ -1519,6 +1578,7 @@ async def slot_swap(interaction: discord.Interaction, slot_a: str, slot_b: str):
         f"🔁 Swapped **{a}** ↔ **{b}**\n- {a}: **{claims[a]['user_name']}**\n- {b}: **{claims[b]['user_name']}**"
     )
 
+
 @slot_group.command(name="unclaimfor", description="Leadership: Remove a claim from a slot.")
 @app_commands.describe(slot="Example: D7")
 async def slot_unclaimfor(interaction: discord.Interaction, slot: str):
@@ -1548,6 +1608,7 @@ async def slot_unclaimfor(interaction: discord.Interaction, slot: str):
 
     await interaction.response.send_message(f"🧹 Unclaimed **{s}** (was **{removed}**).")
 
+
 @slot_group.command(name="label", description="Leadership: Add overlay label on a slot (shows on PNG).")
 @app_commands.describe(slot="Example: E6", label="Example: RALLY")
 async def slot_label(interaction: discord.Interaction, slot: str, label: str):
@@ -1576,6 +1637,7 @@ async def slot_label(interaction: discord.Interaction, slot: str, label: str):
     save_data(bot.data)
 
     await interaction.response.send_message(f"🏷️ Label set: **{s}** → **{layout['slot_labels'][s]}**")
+
 
 @slot_group.command(name="labelclear", description="Leadership: Clear overlay label from a slot.")
 @app_commands.describe(slot="Example: E6")
@@ -1612,5 +1674,5 @@ async def slot_labelclear(interaction: discord.Interaction, slot: str):
 if __name__ == "__main__":
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
-        raise RuntimeError("DISCORD_BOT_TOKEN is not set. Set it, then reopen PowerShell.")
+        raise RuntimeError("DISCORD_BOT_TOKEN is not set. Set it in Railway Variables.")
     bot.run(token)
