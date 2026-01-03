@@ -53,7 +53,7 @@ from PIL import Image, ImageDraw, ImageFont
 # =========================================================
 STATE_ID = 789
 LEADERSHIP_ROLE_NAME = "Leadership"
-DATA_FILE = "hq_layouts.json"
+DATA_FILE = os.getenv("DATA_FILE", "hq_layouts.json")
 
 # Default anchor (used only before calibration is fitted)
 ANCHOR_SLOT_DEFAULT = "F6"
@@ -631,6 +631,18 @@ async def layout_lockreport(interaction: discord.Interaction):
             lines.append(f"- {st['name']} X:{st['x']} Y:{st['y']} → outside grid / not invertible")
 
     await interaction.response.send_message("\n".join(lines))
+
+    @layout_group.command(name="storage", description="Show where the bot is saving data (debug).")
+async def layout_storage(interaction: discord.Interaction):
+    path = os.path.abspath(DATA_FILE)
+    exists = os.path.exists(DATA_FILE)
+    size = os.path.getsize(DATA_FILE) if exists else 0
+    await interaction.response.send_message(
+        f"DATA_FILE = `{DATA_FILE}`\n"
+        f"ABS PATH = `{path}`\n"
+        f"EXISTS = `{exists}` | SIZE = `{size}` bytes",
+        ephemeral=True
+    )
 
 @layout_group.command(name="exportcsv", description="Export slot→coordinate table as CSV (ring + lock + claim + color).")
 async def layout_exportcsv(interaction: discord.Interaction):
