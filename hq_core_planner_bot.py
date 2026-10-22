@@ -27,6 +27,8 @@ import json
 import string
 import io
 import csv
+import tempfile
+import shutil
 from typing import Dict, Any, Optional, List, Tuple
 
 import discord
@@ -69,6 +71,10 @@ LOCKED_SLOTS = {
 }
 
 GUILD_ID_ENV = os.getenv("DISCORD_GUILD_ID")
+# Owner-supplied original HQ Planner Discord Application ID (not a bot token).
+# Fail closed before registering slash commands if the authenticated bot identity
+# does not match this ID. This is owner-provided, not independently verified.
+OWNER_EXPECTED_APPLICATION_ID = 1456045977403130018
 
 
 # =========================================================
@@ -156,12 +162,39 @@ def load_data() -> Dict[str, Any]:
 
 
 def save_data(data: Dict[str, Any]) -> None:
-    data_dir = os.path.dirname(DATA_FILE)
-    if data_dir:
-        os.makedirs(data_dir, exist_ok=True)
+    """Atomically persist the complete layout; preserve a one-generation backup.
 
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    Never truncate the live JSON before a successful temporary-file write.
+    Both temporary files and the backup stay on the same filesystem as DATA_FILE,
+    including Railway's mounted volume. The bot's command behavior is unchanged.
+    """
+    data_dir = os.path.dirname(os.path.abspath(DATA_FILE))
+    os.makedirs(data_dir, exist_ok=True)
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    fd, staged = tempfile.mkstemp(prefix=".hq-layout-", suffix=".tmp", dir=data_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(payload)
+            out.flush()
+            os.fsync(out.fileno())
+        if os.path.isfile(DATA_FILE):
+            old_backup = DATA_FILE + ".bak"
+            backup_fd, backup_staged = tempfile.mkstemp(
+                prefix=".hq-backup-", suffix=".tmp", dir=data_dir
+            )
+            try:
+                with os.fdopen(backup_fd, "wb") as copy_to, open(DATA_FILE, "rb") as copy_from:
+                    shutil.copyfileobj(copy_from, copy_to)
+                    copy_to.flush()
+                    os.fsync(copy_to.fileno())
+                os.replace(backup_staged, old_backup)
+            finally:
+                if os.path.exists(backup_staged):
+                    os.unlink(backup_staged)
+        os.replace(staged, DATA_FILE)
+    finally:
+        if os.path.exists(staged):
+            os.unlink(staged)
 
 
 # =========================================================
@@ -381,18 +414,44 @@ class HQCorePlanner(commands.Bot):
         self.data = load_data()
 
     async def setup_hook(self):
+        # setup_hook runs after the Discord token has been authenticated.
+        # Do not register/sync commands against the wrong application.
+        actual_application_id = self.application_id
+        if actual_application_id is None or int(actual_application_id) != OWNER_EXPECTED_APPLICATION_ID:
+            print(
+                "HQ_APPLICATION_ID_MISMATCH expected={} actual={}".format(
+                    OWNER_EXPECTED_APPLICATION_ID,
+                    actual_application_id if actual_application_id is not None else "unavailable",
+                ), flush=True,
+            )
+            raise RuntimeError("Original HQ Discord Application ID mismatch: refusing command synchronization.")
+        print("HQ_APPLICATION_ID_VERIFIED app_id={}".format(OWNER_EXPECTED_APPLICATION_ID), flush=True)
         self.tree.add_command(layout_group)
         self.tree.add_command(slot_group)
         self.tree.add_command(cal_group)
 
-        # Faster dev sync if DISCORD_GUILD_ID is set
-        if GUILD_ID_ENV and GUILD_ID_ENV.isdigit():
-            gid = int(GUILD_ID_ENV)
-            guild = discord.Object(id=gid)
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-        else:
-            await self.tree.sync()
+        # Operational milestones only: no credentials, guild data or player names.
+        # If SYNC_START appears but SYNC_OK does not, inspect startup traceback.
+        # If SYNC_OK appears but HQ_BOT_READY does not, inspect gateway/connectivity.
+        scope = "guild" if GUILD_ID_ENV and GUILD_ID_ENV.isdigit() else "global"
+        print(f"HQ_SYNC_START scope={scope}", flush=True)
+        try:
+            if scope == "guild":
+                guild = discord.Object(id=int(GUILD_ID_ENV))
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+            else:
+                synced = await self.tree.sync()
+        except Exception as exc:
+            print(f"HQ_SYNC_FAILED type={type(exc).__name__}", flush=True)
+            raise
+        print(f"HQ_SYNC_OK scope={scope} commands={len(synced)}", flush=True)
+
+    async def on_ready(self):
+        # Discord Application ID is an identifier, NOT a token.
+        # Avoid logging actual layout contents, passwords or guild member lists.
+        app_id = self.application_id if self.application_id is not None else "unavailable"
+        print(f"HQ_BOT_READY app_id={app_id} guilds={len(self.guilds)}", flush=True)
 
 
 bot = HQCorePlanner()
