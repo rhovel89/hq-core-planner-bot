@@ -14,14 +14,14 @@ import os
 from pathlib import Path
 
 
-def check(require_volume: bool = False) -> int:
+def check(require_volume: bool = False, inspect_only: bool = False) -> int:
     path = Path(os.environ.get("DATA_FILE", "hq_layouts.json")).expanduser()
     resolved = path.resolve()
     mount = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
-    print("HQ preflight: READ ONLY")
+    print("HQ preflight: INSPECT ONLY" if inspect_only else "HQ preflight: READ ONLY")
     print(f"DATA_FILE={resolved}")
 
-    if not os.environ.get("DISCORD_BOT_TOKEN", "").strip():
+    if not inspect_only and not os.environ.get("DISCORD_BOT_TOKEN", "").strip():
         print("FAIL: DISCORD_BOT_TOKEN is not configured (value not displayed)")
         return 2
     if require_volume:
@@ -52,6 +52,8 @@ def check(require_volume: bool = False) -> int:
     print(f"PASS: {len(data)} guild layout(s), {claim_count} saved assignment(s)")
     print(f"File bytes: {len(raw)}; SHA-256: {hashlib.sha256(raw).hexdigest()}")
     print("Only schema shape was checked. Live coordinates and guild mapping still need verification.")
+    if inspect_only:
+        print("INSPECTION COMPLETE: no Discord connection, no bot token required, no files modified.")
     return 0
 
 
@@ -59,5 +61,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-volume", action="store_true",
                         help="Fail unless the JSON path is inside the Railway volume mount")
+    parser.add_argument("--inspect-only", action="store_true",
+                        help="Read and fingerprint existing layout without needing Discord credentials or starting bot")
     args = parser.parse_args()
-    raise SystemExit(check(require_volume=args.require_volume))
+    raise SystemExit(check(require_volume=args.require_volume, inspect_only=args.inspect_only))
