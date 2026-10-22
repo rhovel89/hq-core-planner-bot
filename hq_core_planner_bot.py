@@ -27,6 +27,8 @@ import json
 import string
 import io
 import csv
+import tempfile
+import shutil
 from typing import Dict, Any, Optional, List, Tuple
 
 import discord
@@ -156,12 +158,39 @@ def load_data() -> Dict[str, Any]:
 
 
 def save_data(data: Dict[str, Any]) -> None:
-    data_dir = os.path.dirname(DATA_FILE)
-    if data_dir:
-        os.makedirs(data_dir, exist_ok=True)
+    """Atomically persist the complete layout; preserve a one-generation backup.
 
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    Never truncate the live JSON before a successful temporary-file write.
+    Both temporary files and the backup stay on the same filesystem as DATA_FILE,
+    including Railway's mounted volume. The bot's command behavior is unchanged.
+    """
+    data_dir = os.path.dirname(os.path.abspath(DATA_FILE))
+    os.makedirs(data_dir, exist_ok=True)
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    fd, staged = tempfile.mkstemp(prefix=".hq-layout-", suffix=".tmp", dir=data_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(payload)
+            out.flush()
+            os.fsync(out.fileno())
+        if os.path.isfile(DATA_FILE):
+            old_backup = DATA_FILE + ".bak"
+            backup_fd, backup_staged = tempfile.mkstemp(
+                prefix=".hq-backup-", suffix=".tmp", dir=data_dir
+            )
+            try:
+                with os.fdopen(backup_fd, "wb") as copy_to, open(DATA_FILE, "rb") as copy_from:
+                    shutil.copyfileobj(copy_from, copy_to)
+                    copy_to.flush()
+                    os.fsync(copy_to.fileno())
+                os.replace(backup_staged, old_backup)
+            finally:
+                if os.path.exists(backup_staged):
+                    os.unlink(backup_staged)
+        os.replace(staged, DATA_FILE)
+    finally:
+        if os.path.exists(staged):
+            os.unlink(staged)
 
 
 # =========================================================
