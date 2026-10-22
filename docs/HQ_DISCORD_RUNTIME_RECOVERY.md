@@ -5,6 +5,8 @@
 ## Investigated state, October 21, 2026
 
 - Original Discord bot: `rhovel89/hq-core-planner-bot`. Source implements `/layout storage`.
+- **October 21 owner-provided Discord Application ID: `1456045977403130018`.** This is an owner identification statement, **not yet independently bound to a live Discord bot token, original Railway service or current runtime file**. This ID is not a secret and is safe to use for identification; the token is never shared in chat.
+- The recovery branch now fails closed in `setup_hook` before any slash-command registration/synchronization if Discord reports a different or unavailable authenticated application ID. A match emits `HQ_APPLICATION_ID_VERIFIED app_id=1456045977403130018`; mismatch emits `HQ_APPLICATION_ID_MISMATCH` without leaking credentials. This prevents accidental command registration against an unrelated bot when credentials are configured in the host.
 - Existing GitHub `hq_layouts.json`: 1 guild, 12 assignments, 19 reference calibration points, E6 anchor. This may **not** be the newest live data.
 - Across the six Railway projects accessible to the owner's connected Railway account, no running service sourced from `hq-core-planner-bot` was found. An external service/account remains possible. Do not use unrelated `pns-alliance-bot` or `alliance-bot-prod` credentials.
 - `/layout storage` timing out is consistent with a disconnected Discord process, but the exact application's current host/identity is not yet proven.
@@ -22,7 +24,7 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
 
 ## Safe recovery procedure
 
-1. Determine the exact **existing** Discord bot application (Discord Developer Portal application ID; never paste its token into a chat).
+1. Use the owner-supplied **Discord Application ID `1456045977403130018`** as the expected existing HQ bot identity; verify it in the Discord Developer Portal. Do not paste its token into chat. The public ID does **not** establish where the bot is hosted.
 2. Identify the bot's actual deployed host/service. If it is under another Railway workspace/account, gain appropriate access before recovery. Verify `DISCORD_BOT_TOKEN` belongs to this application; do not reuse tokens from unrelated Railway services.
 3. Confirm or retrieve its **actual latest** `DATA_FILE` and preserve at least one offsite copy. If stored on a Railway volume, select the **correct** project, environment, and volume using the CLI:
    ```sh
@@ -37,10 +39,11 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
    - `DISCORD_BOT_TOKEN`: existing bot application's token, set in Railway's secrets UI; never disclose
    - `DISCORD_GUILD_ID`: optional ID of the existing server for guild-scoped sync
    - `RAILWAY_VOLUME_MOUNT_PATH`: should reflect Railway's volume mount; if unavailable, investigate instead of bypassing preflight
-6. Only after the stored file is preserved and matches the target application, set Start Command to `sh scripts/start_hq_worker.sh`, then test this branch in the verified worker's deployment path. Review logs for `PASS` from the preflight; a passing check does **not** guarantee Discord connectivity.
+6. Only after the stored file is preserved and matches the target application, set Start Command to `sh scripts/start_hq_worker.sh`, then test this branch in the verified worker's deployment path. The code itself compares the token-authenticated application to `1456045977403130018` **before** registering commands, then emits `HQ_APPLICATION_ID_VERIFIED` if matched. A mismatch is a stop, not a reason to override the code or swap an unrelated token. Review storage preflight `PASS`, application-ID verification, `HQ_SYNC_OK`, and `HQ_BOT_READY` in order; none alone proves the Discord command responds.
 7. Check the verified service's deployment logs **in this order**:
    - No preflight PASS: stopped at stored-file, volume, or credential validation. Do not bypass preflight.
-   - `HQ_SYNC_START` without `HQ_SYNC_OK`: slash-command synchronization failed; review the startup exception and registered application's permissions.
+   - `HQ_APPLICATION_ID_MISMATCH`: this token belongs to another/unknown application, or the expected ID is unavailable. **Stop before any slash-command sync**; do not use another bot's credentials.
+   - `HQ_APPLICATION_ID_VERIFIED` followed by `HQ_SYNC_START` without `HQ_SYNC_OK`: the expected application is authenticated, but slash-command synchronization failed; review startup and permissions.
    - `HQ_SYNC_OK` without `HQ_BOT_READY`: synchronization completed, but gateway readiness is not verified; inspect Discord network/connection logs and application identity.
    - `HQ_BOT_READY` present: the original worker connected and reports an application ID, but command response still needs to be tested from the intended server. Compare application ID with the developer portal before accepting the deployment.
 8. In Discord, run nondestructive `/layout storage` then `/slot coord`. Confirm an ephemeral response, runtime path, and that existing assignments remain unchanged. Monitor runtime logs and exit status.
