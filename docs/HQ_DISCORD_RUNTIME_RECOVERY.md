@@ -7,7 +7,7 @@
 - Original Discord bot: `rhovel89/hq-core-planner-bot`. Source implements `/layout storage`.
 - **October 21 owner-provided Discord Application ID: `1456045977403130018`.** This is an owner identification statement, **not yet independently bound to a live Discord bot token, original Railway service or current runtime file**. This ID is not a secret and is safe to use for identification; the token is never shared in chat.
 - The recovery branch now fails closed in `setup_hook` before any slash-command registration/synchronization if Discord reports a different or unavailable authenticated application ID. A match emits `HQ_APPLICATION_ID_VERIFIED app_id=1456045977403130018`; mismatch emits `HQ_APPLICATION_ID_MISMATCH` without leaking credentials. This prevents accidental command registration against an unrelated bot when credentials are configured in the host.
-- Existing GitHub `hq_layouts.json`: 1 guild, 12 assignments, 19 reference calibration points, E6 anchor. This may **not** be the newest live data.
+- Existing GitHub `hq_layouts.json`: historical guild key **`1438307693579206666`**, 12 assignments, 19 reference calibration points and E6 anchor. This is a **source-file guild ID, not the Discord Application ID**. It is not independently confirmed as the guild of the currently running bot, and this GitHub snapshot may **not** be the newest live data.
 - Across the six Railway projects accessible to the owner's connected Railway account, no running service sourced from `hq-core-planner-bot` was found. An external service/account remains possible. Do not use unrelated `pns-alliance-bot` or `alliance-bot-prod` credentials.
 - `/layout storage` timing out is consistent with a disconnected Discord process, but the exact application's current host/identity is not yet proven.
 
@@ -33,7 +33,7 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
    railway volume files download /hq_layouts.json ./hq_layouts-live.json
    ```
    These commands assume the selected volume is mounted at `/app/data` and the file is in its root. The GitHub snapshot is a separate fallback, not proof of the latest live state.
-4. Compare the runtime copy with the GitHub snapshot using the existing read-only Command Center comparison tool. Verify the Discord guild corresponds to the intended Supabase alliance; review F6/F7 calibration mismatches in the game.
+4. Compare the runtime copy with the GitHub snapshot using the existing read-only Command Center comparison tool. Its archived guild key is `1438307693579206666`; independently confirm that this is the exact Discord server where `/layout storage` is used, then verify the guild corresponds to the intended Supabase alliance. Review F6/F7 calibration mismatches in the game. Do **not** use the Application ID `1456045977403130018` as a guild ID, and do not auto-import the snapshot.
 5. On the **verified original bot service**, ensure its existing persistent volume is mounted at `/app/data` and its latest file lives at `/app/data/hq_layouts.json`. Configure:
    - `DATA_FILE=/app/data/hq_layouts.json`
    - `DISCORD_BOT_TOKEN`: existing bot application's token, set in Railway's secrets UI; never disclose
