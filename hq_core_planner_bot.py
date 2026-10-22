@@ -414,14 +414,28 @@ class HQCorePlanner(commands.Bot):
         self.tree.add_command(slot_group)
         self.tree.add_command(cal_group)
 
-        # Faster dev sync if DISCORD_GUILD_ID is set
-        if GUILD_ID_ENV and GUILD_ID_ENV.isdigit():
-            gid = int(GUILD_ID_ENV)
-            guild = discord.Object(id=gid)
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-        else:
-            await self.tree.sync()
+        # Operational milestones only: no credentials, guild data or player names.
+        # If SYNC_START appears but SYNC_OK does not, inspect startup traceback.
+        # If SYNC_OK appears but HQ_BOT_READY does not, inspect gateway/connectivity.
+        scope = "guild" if GUILD_ID_ENV and GUILD_ID_ENV.isdigit() else "global"
+        print(f"HQ_SYNC_START scope={scope}", flush=True)
+        try:
+            if scope == "guild":
+                guild = discord.Object(id=int(GUILD_ID_ENV))
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+            else:
+                synced = await self.tree.sync()
+        except Exception as exc:
+            print(f"HQ_SYNC_FAILED type={type(exc).__name__}", flush=True)
+            raise
+        print(f"HQ_SYNC_OK scope={scope} commands={len(synced)}", flush=True)
+
+    async def on_ready(self):
+        # Discord Application ID is an identifier, NOT a token.
+        # Avoid logging actual layout contents, passwords or guild member lists.
+        app_id = self.application_id if self.application_id is not None else "unavailable"
+        print(f"HQ_BOT_READY app_id={app_id} guilds={len(self.guilds)}", flush=True)
 
 
 bot = HQCorePlanner()
