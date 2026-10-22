@@ -22,6 +22,39 @@
 
 This gate intentionally refuses to start a bot on an empty volume. **Do not bypass it by creating a new layout** or copying over a potentially newer live file.
 
+## Connected Railway review — October 22, 2026
+
+The owner's currently connected Railway workspace `rhovel89's Projects` exposes six projects; four contain application services. **None is a verified host of `rhovel89/hq-core-planner-bot`.** Don't mistake another bot's GitHub source, variables, or volume for the original Python bot:
+
+| Railway project | Actual accessible source | Relevant constraint |
+|---|---|---|
+| `hopeful-forgiveness` | source unlinked | No attached volume; old deployments REMOVED; original bot identity unverified |
+| `alliance-bot-prod` | `rhovel89/alliance-bot-prod` (Node) | Not the original Python `/layout storage` bot |
+| `lucky-radiance` | `rhovel89/pns-alliance-bot` (Node) | Service currently offline. **Existing 500 MB volume `alliancebot-volume` at `/app/data` belongs to this Node app; latest failed deployment reports `MIGRATE_VOLUMES`.** Preserve it and do not attach it to the Python bot |
+| `radiant-rebirth` | `rhovel89/pns-events-intel-bot` (Node) + Postgres | Unrelated events/intelligence bot and database; do not reconfigure |
+| `hearty-dedication`, `helpful-smile` | no application services | Empty project alone is not proof of the original bot's latest persisted data |
+
+The Railway OAuth connector reports the account **registered**, but does **not** expose confirmation of a paid plan or available deployment spending. The above are read-only observations, not authority to purchase, create a substitute bot, redeploy an unrelated service, or overwrite a volume.
+
+## Offline/read-only storage inspection (new)
+
+Run this only against a **confirmed current HQ bot layout file** from the correct original host. The newly added inspection mode intentionally does not need a bot token, does not contact Discord, and does not change file bytes:
+
+```sh
+# If examining a safely downloaded local copy (no Railway mount):
+DATA_FILE=./hq-layouts-recovered.json python scripts/preflight_storage.py --inspect-only
+
+# On the correctly identified Railway worker, for a volume already
+# mounted at /app/data, with the live DATA_FILE verified first:
+DATA_FILE=/app/data/hq_layouts.json python scripts/preflight_storage.py --require-volume --inspect-only
+```
+
+The output contains only safe counts, a file-size and SHA-256 fingerprint, not guild IDs or player names. Inspection **still fails closed** on missing volume, missing file, corrupt JSON or invalid guild layout shape. This mode does not bypass the production `sh scripts/start_hq_worker.sh` startup gate: normal startup still requires `DISCORD_BOT_TOKEN`, the verified mounted volume file, and the authenticated Discord application-ID match (`1456045977403130018`).
+
+If the original HQ volume is found, Railway's official file-management CLI can download rather than upload/overwrite its contents. Use `railway volume files --volume <VERIFIED_HQ_VOLUME_ID> list /` and `railway volume files --volume <VERIFIED_HQ_VOLUME_ID> download /hq_layouts.json ./hq-layouts-recovered.json`; specify verified project/service/environment context and confirm the actual remote file path first. The known `alliancebot-volume` is **not** verified as this Python bot's data volume.
+
+Source: Railway [volume documentation](https://docs.railway.com/volumes), [CLI file-management reference](https://docs.railway.com/cli/volume), and [volume backups](https://docs.railway.com/volumes/backups). Inspect and preserve backups before any recovery or volume reattachment.
+
 ## Safe recovery procedure
 
 1. Use the owner-supplied **Discord Application ID `1456045977403130018`** as the expected existing HQ bot identity; verify it in the Discord Developer Portal. Do not paste its token into chat. The public ID does **not** establish where the bot is hosted.
