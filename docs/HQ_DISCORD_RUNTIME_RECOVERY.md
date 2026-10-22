@@ -15,7 +15,8 @@
 - `scripts/preflight_storage.py --require-volume` **fails closed before the bot starts** if the correct token is missing, the volume is not reported, the configured `DATA_FILE` is outside the volume, JSON is missing/invalid, or guild layouts are malformed.
 - Preflight reads only and logs **record counts and a file SHA-256**, never names, guild IDs, Discord tokens, or layout contents.
 - Layout saves use same-volume atomic file replacement and keep one automatically rotated `hq_layouts.json.bak` generation. A failed serialization or backup write leaves the live JSON untouched. The backup is a local fallback, not an offsite backup.
-- CI runs Python syntax verification, synthetic storage validation and atomic-save regression tests. No Discord login occurs in CI.
+- CI runs Python syntax verification, synthetic storage validation, atomic-save, `/layout storage` handler, and startup/Discord readiness logging tests. No Discord login occurs in CI.
+- The original bot now writes **sanitized startup milestones**: `HQ_SYNC_START scope=global|guild`, `HQ_SYNC_OK scope=... commands=N`, and `HQ_BOT_READY app_id=... guilds=N`. A failure to register Discord commands writes `HQ_SYNC_FAILED type=...` and fails startup. It does **not** log tokens, player names, saved assignments, or guild IDs. These logs are not a substitute for actual Discord command invocation.
 
 This gate intentionally refuses to start a bot on an empty volume. **Do not bypass it by creating a new layout** or copying over a potentially newer live file.
 
@@ -37,8 +38,13 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
    - `DISCORD_GUILD_ID`: optional ID of the existing server for guild-scoped sync
    - `RAILWAY_VOLUME_MOUNT_PATH`: should reflect Railway's volume mount; if unavailable, investigate instead of bypassing preflight
 6. Only after the stored file is preserved and matches the target application, set Start Command to `sh scripts/start_hq_worker.sh`, then test this branch in the verified worker's deployment path. Review logs for `PASS` from the preflight; a passing check does **not** guarantee Discord connectivity.
-7. In Discord, run nondestructive `/layout storage` then `/slot coord`. Confirm an ephemeral response, runtime path, and that existing assignments remain unchanged. Monitor runtime logs and exit status.
-8. Keep the Command Center `main` release and Supabase layout import on hold until real R5 and member tests, restore rehearsal, calibration, and explicit final release acceptance.
+7. Check the verified service's deployment logs **in this order**:
+   - No preflight PASS: stopped at stored-file, volume, or credential validation. Do not bypass preflight.
+   - `HQ_SYNC_START` without `HQ_SYNC_OK`: slash-command synchronization failed; review the startup exception and registered application's permissions.
+   - `HQ_SYNC_OK` without `HQ_BOT_READY`: synchronization completed, but gateway readiness is not verified; inspect Discord network/connection logs and application identity.
+   - `HQ_BOT_READY` present: the original worker connected and reports an application ID, but command response still needs to be tested from the intended server. Compare application ID with the developer portal before accepting the deployment.
+8. In Discord, run nondestructive `/layout storage` then `/slot coord`. Confirm an ephemeral response, runtime path, and that existing assignments remain unchanged. Monitor runtime logs and exit status.
+9. Keep the Command Center `main` release and Supabase layout import on hold until real R5 and member tests, restore rehearsal, calibration, and explicit final release acceptance.
 
 ## Emergency stop
 
