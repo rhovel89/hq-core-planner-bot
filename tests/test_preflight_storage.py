@@ -60,6 +60,49 @@ class HQPreflightTests(unittest.TestCase):
         env = {**self.env, "RAILWAY_VOLUME_MOUNT_PATH": str(self.root / "elsewhere")}
         self.assertEqual(self.run_preflight(env).returncode, 3)
 
+    def test_inspect_only_without_token_preserves_file(self):
+        env = {**self.env}
+        env.pop("DISCORD_BOT_TOKEN", None)
+        before = self.file.read_bytes()
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--require-volume", "--inspect-only"],
+            env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("HQ preflight: INSPECT ONLY", result.stdout)
+        self.assertIn("INSPECTION COMPLETE", result.stdout)
+        self.assertIn("SHA-256:", result.stdout)
+        self.assertNotIn("PRIVATE FIXTURE PLAYER", result.stdout)
+        self.assertNotIn("fixture-guild", result.stdout)
+        self.assertEqual(self.file.read_bytes(), before, "Inspection must not change saved layouts")
+
+    def test_inspect_only_missing_volume_still_fails(self):
+        env = {**self.env}
+        env.pop("DISCORD_BOT_TOKEN", None)
+        env.pop("RAILWAY_VOLUME_MOUNT_PATH", None)
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--require-volume", "--inspect-only"],
+            env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("no Railway volume mount", result.stdout)
+
+    def test_inspect_only_missing_file_still_fails(self):
+        env = {**self.env}
+        env.pop("DISCORD_BOT_TOKEN", None)
+        self.file.unlink()
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--require-volume", "--inspect-only"],
+            env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 4)
+
+    def test_inspect_only_rejects_malformed_layout(self):
+        env = {**self.env}
+        env.pop("DISCORD_BOT_TOKEN", None)
+        self.file.write_text('{"guild":{"notClaims":{}}}', encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--require-volume", "--inspect-only"],
+            env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 6)
+
     def test_missing_bot_token_fails(self):
         env = {**self.env}
         env.pop("DISCORD_BOT_TOKEN")
