@@ -71,6 +71,10 @@ LOCKED_SLOTS = {
 }
 
 GUILD_ID_ENV = os.getenv("DISCORD_GUILD_ID")
+# Owner-supplied original HQ Planner Discord Application ID (not a bot token).
+# Fail closed before registering slash commands if the authenticated bot identity
+# does not match this ID. This is owner-provided, not independently verified.
+OWNER_EXPECTED_APPLICATION_ID = 1456045977403130018
 
 
 # =========================================================
@@ -410,6 +414,18 @@ class HQCorePlanner(commands.Bot):
         self.data = load_data()
 
     async def setup_hook(self):
+        # setup_hook runs after the Discord token has been authenticated.
+        # Do not register/sync commands against the wrong application.
+        actual_application_id = self.application_id
+        if actual_application_id is None or int(actual_application_id) != OWNER_EXPECTED_APPLICATION_ID:
+            print(
+                "HQ_APPLICATION_ID_MISMATCH expected={} actual={}".format(
+                    OWNER_EXPECTED_APPLICATION_ID,
+                    actual_application_id if actual_application_id is not None else "unavailable",
+                ), flush=True,
+            )
+            raise RuntimeError("Original HQ Discord Application ID mismatch: refusing command synchronization.")
+        print("HQ_APPLICATION_ID_VERIFIED app_id={}".format(OWNER_EXPECTED_APPLICATION_ID), flush=True)
         self.tree.add_command(layout_group)
         self.tree.add_command(slot_group)
         self.tree.add_command(cal_group)
