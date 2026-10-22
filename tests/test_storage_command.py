@@ -44,15 +44,15 @@ class StorageReplyTests(unittest.TestCase):
 
     def test_absent_file_responds_quickly_and_privately(self):
         reply=self.invoke()
-        self.assertIn("EXISTS = \`False\`",reply)
-        self.assertIn("SIZE = \`0\` bytes",reply)
+        self.assertIn("EXISTS = `False`",reply)
+        self.assertIn("SIZE = `0` bytes",reply)
         self.assertIn(str(self.path),reply)
 
     def test_present_file_responds_quickly_and_privately(self):
         self.path.write_text('{"synthetic":true}',encoding="utf-8")
         reply=self.invoke()
-        self.assertIn("EXISTS = \`True\`",reply)
-        self.assertIn("SIZE = \`18\` bytes",reply)
+        self.assertIn("EXISTS = `True`",reply)
+        self.assertIn("SIZE = `18` bytes",reply)
         self.assertEqual(self.path.read_text(), '{"synthetic":true}')
 
 if __name__=="__main__":
