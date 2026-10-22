@@ -14,7 +14,8 @@
 - `scripts/start_hq_worker.sh` is a portable guarded Python worker entrypoint. On the **verified original service**, set the Railway Start Command to `sh scripts/start_hq_worker.sh` after preserving the current layout. No service configuration has been changed automatically. Railway deprecated `railway.json`/`railway.toml` for new services and recommends modern Infrastructure as Code (`.railway/railway.ts`) when infrastructure ownership is established.
 - `scripts/preflight_storage.py --require-volume` **fails closed before the bot starts** if the correct token is missing, the volume is not reported, the configured `DATA_FILE` is outside the volume, JSON is missing/invalid, or guild layouts are malformed.
 - Preflight reads only and logs **record counts and a file SHA-256**, never names, guild IDs, Discord tokens, or layout contents.
-- CI runs Python syntax verification and synthetic preflight tests. No Discord login occurs in CI.
+- Layout saves use same-volume atomic file replacement and keep one automatically rotated `hq_layouts.json.bak` generation. A failed serialization or backup write leaves the live JSON untouched. The backup is a local fallback, not an offsite backup.
+- CI runs Python syntax verification, synthetic storage validation and atomic-save regression tests. No Discord login occurs in CI.
 
 This gate intentionally refuses to start a bot on an empty volume. **Do not bypass it by creating a new layout** or copying over a potentially newer live file.
 
