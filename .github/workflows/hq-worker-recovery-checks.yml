@@ -18,5 +18,7 @@ jobs:
           python-version: '3.12'
       - name: Python syntax verification
         run: python -m py_compile hq_core_planner_bot.py scripts/preflight_storage.py
+      - name: Validate portable worker startup shell
+        run: sh -n scripts/start_hq_worker.sh
       - name: Offline storage safeguards
         run: python -m unittest discover -s tests -v
