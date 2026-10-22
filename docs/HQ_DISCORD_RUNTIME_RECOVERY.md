@@ -11,7 +11,7 @@
 
 ## What this branch changes
 
-- `railway.json` supplies an explicit Python worker start command, rather than relying on automatic entrypoint inference.
+- `scripts/start_hq_worker.sh` is a portable guarded Python worker entrypoint. On the **verified original service**, set the Railway Start Command to `sh scripts/start_hq_worker.sh` after preserving the current layout. No service configuration has been changed automatically. Railway deprecated `railway.json`/`railway.toml` for new services and recommends modern Infrastructure as Code (`.railway/railway.ts`) when infrastructure ownership is established.
 - `scripts/preflight_storage.py --require-volume` **fails closed before the bot starts** if the correct token is missing, the volume is not reported, the configured `DATA_FILE` is outside the volume, JSON is missing/invalid, or guild layouts are malformed.
 - Preflight reads only and logs **record counts and a file SHA-256**, never names, guild IDs, Discord tokens, or layout contents.
 - CI runs Python syntax verification and synthetic preflight tests. No Discord login occurs in CI.
@@ -35,7 +35,7 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
    - `DISCORD_BOT_TOKEN`: existing bot application's token, set in Railway's secrets UI; never disclose
    - `DISCORD_GUILD_ID`: optional ID of the existing server for guild-scoped sync
    - `RAILWAY_VOLUME_MOUNT_PATH`: should reflect Railway's volume mount; if unavailable, investigate instead of bypassing preflight
-6. Only after the stored file is preserved and matches the target application, test this branch in the verified worker's deployment path. Review logs for `PASS` from the preflight; a passing check does **not** guarantee Discord connectivity.
+6. Only after the stored file is preserved and matches the target application, set Start Command to `sh scripts/start_hq_worker.sh`, then test this branch in the verified worker's deployment path. Review logs for `PASS` from the preflight; a passing check does **not** guarantee Discord connectivity.
 7. In Discord, run nondestructive `/layout storage` then `/slot coord`. Confirm an ephemeral response, runtime path, and that existing assignments remain unchanged. Monitor runtime logs and exit status.
 8. Keep the Command Center `main` release and Supabase layout import on hold until real R5 and member tests, restore rehearsal, calibration, and explicit final release acceptance.
 
@@ -44,5 +44,5 @@ This gate intentionally refuses to start a bot on an empty volume. **Do not bypa
 If the file is absent, malformed, or older than a known snapshot, **stop and preserve the data**. Do not run `/layout create` or a forced migration; that can replace a guild layout. No changes to unrelated Railway services or pending staged changes are authorized.
 
 Railway references:
-- [Railway config-as-code start command](https://docs.railway.com/config-as-code/reference#start-command)
+- [Railway Start Command](https://docs.railway.com/deployments/start-command) and [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code)
 - [Railway volume file retrieval](https://docs.railway.com/cli/volume#download-a-file-from-a-volume)
